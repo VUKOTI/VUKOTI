@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulma Task Management App</title>
+    <!-- Bulma CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css" rel="stylesheet">
+    <!-- Animate.css for additional animations -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <style>
+        body {
+            padding-top: 50px;
+            background-color: #f5f5f5;
+        }
+        .table-container {
+            margin-bottom: 40px;
+            overflow-x: auto;
+        }
+        /* Custom Animations */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        .fade-out {
+            animation: fadeOut 0.5s ease-in-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+        /* Modal Animation */
+        .modal.animate__animated.animate__fadeInDown {
+            animation-duration: 0.5s;
+        }
+        .modal.animate__animated.animate__fadeOutUp {
+            animation-duration: 0.5s;
+        }
+        /* Alert Positioning */
+        #alert-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Alert Section -->
+    <div id="alert-container"></div>
+
+    <!-- Header -->
+    <div class="level mb-4">
+        <div class="level-left">
+            <h1 class="title">Task Management</h1>
+        </div>
+        <div class="level-right">
+            <button class="button is-primary" onclick="openAddTaskModal()">
+                <span class="icon">
+                    <i class="fas fa-plus"></i>
+                </span>
+                <span>Add Task</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Pending Tasks Table -->
+    <div class="table-container" id="pending-tasks-container">
+        <h3 class="subtitle">Pending Tasks</h3>
+        <table class="table is-striped is-hoverable is-fullwidth" id="pending-task-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Task Title</th>
+                    <th>Description</th>
+                    <th>Progress</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Pending tasks will be appended here dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Completed Tasks Table -->
+    <div class="table-container" id="completed-tasks-container" style="display: none;">
+        <h3 class="subtitle">Completed Tasks</h3>
+        <table class="table is-striped is-hoverable is-fullwidth" id="completed-task-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Task Title</th>
+                    <th>Description</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Completed tasks will be appended here dynamically -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Task Modal -->
+<div class="modal" id="taskModal">
+  <div class="modal-background"></div>
+  <div class="modal-card animate__animated">
+    <header class="modal-card-head">
+      <p class="modal-card-title" id="taskModalLabel">Add Task</p>
+      <button class="delete" aria-label="close" onclick="closeTaskModal()"></button>
+    </header>
+    <section class="modal-card-body">
+      <form id="task-form" onsubmit="saveTask(event)">
+          <input type="hidden" id="task-id">
+          <div class="field">
+              <label class="label" for="task-title">Task Title</label>
+              <div class="control">
+                  <input class="input" type="text" id="task-title" placeholder="e.g. Complete Assignment" required>
+              </div>
+          </div>
+          <div class="field">
+              <label class="label" for="task-desc">Description</label>
+              <div class="control">
+                  <textarea class="textarea" id="task-desc" placeholder="Task description" rows="3" required></textarea>
+              </div>
+          </div>
+          <div class="field">
+              <label class="label" for="task-progress">Progress (%)</label>
+              <div class="control">
+                  <input class="input" type="number" id="task-progress" min="0" max="100" value="0" required>
+              </div>
+          </div>
+      </form>
+    </section>
+    <footer class="modal-card-foot">
+      <button class="button is-success" form="task-form">Save Task</button>
+      <button class="button" onclick="closeTaskModal()">Cancel</button>
+    </footer>
+  </div>
+</div>
+
+<!-- Font Awesome for icons -->
+<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+
+<script>
+    let tasks = [];
+    let editMode = false;
+
+    // Load tasks from localStorage if available
+    document.addEventListener('DOMContentLoaded', () => {
+        loadData();
+        renderTasks();
+    });
+
+    // Function to display alerts
+    function showAlert(message, type='is-success') {
+        const alertContainer = document.getElementById('alert-container');
+        const alert = document.createElement('div');
+        alert.className = `notification ${type} animate__animated animate__fadeInRight`;
+        alert.innerHTML = `
+            ${message}
+            <button class="delete"></button>
+        `;
+        alertContainer.appendChild(alert);
+
+        // Remove alert after 3 seconds
+        setTimeout(() => {
+            alert.classList.remove('animate__fadeInRight');
+            alert.classList.add('animate__fadeOutRight');
+            alert.addEventListener('animationend', () => alert.remove());
+        }, 3000);
+
+        // Remove alert on close button click
+        alert.querySelector('.delete').addEventListener('click', () => {
+            alert.classList.add('animate__fadeOutRight');
+            alert.addEventListener('animationend', () => alert.remove());
+        });
+    }
+
+    // Function to open Add Task Modal
+    function openAddTaskModal() {
+        editMode = false;
+        document.getElementById('taskModalLabel').innerText = 'Add Task';
+        document.getElementById('task-form').reset();
+        document.getElementById('task-id').value = '';
+        openModal();
+    }
+
+    // Function to open Edit Task Modal
+    function openEditTaskModal(id) {
+        editMode = true;
+        const task = tasks.find(t => t.id === id);
+        if (task) {
+            document.getElementById('taskModalLabel').innerText = 'Edit Task';
+            document.getElementById('task-id').value = task.id;
+            document.getElementById('task-title').value = task.title;
+            document.getElementById('task-desc').value = task.description;
+            document.getElementById('task-progress').value = task.progress;
+            openModal();
+        }
+    }
+
+    // Function to open Modal with animation
+    function openModal() {
+        const modal = document.getElementById('taskModal');
+        modal.classList.add('is-active', 'animate__fadeInDown');
+        modal.querySelector('.modal-card').classList.remove('animate__fadeOutUp');
+        modal.querySelector('.modal-card').classList.add('animate__fadeInDown');
+    }
+
+    // Function to close Modal with animation
+    function closeTaskModal() {
+        const modal = document.getElementById('taskModal');
+        modal.querySelector('.modal-card').classList.remove('animate__fadeInDown');
+        modal.querySelector('.modal-card').classList.add('animate__fadeOutUp');
+        modal.classList.remove('is-active');
+    }
+
+    // Function to save Task (Add or Edit)
+    function saveTask(event) {
+        event.preventDefault();
+        const id = document.getElementById('task-id').value;
+        const title = document.getElementById('task-title').value.trim();
+        const description = document.getElementById('task-desc').value.trim();
+        const progress = parseInt(document.getElementById('task-progress').value);
+        const status = progress >= 100 ? 'completed' : 'pending';
+
+        if (editMode) {
+            // Edit existing task
+            const taskIndex = tasks.findIndex(t => t.id === id);
+            if (taskIndex !== -1) {
+                tasks[taskIndex].title = title;
+                tasks[taskIndex].description = description;
+                tasks[taskIndex].progress = progress;
+                tasks[taskIndex].status = status;
+                showAlert('Task updated successfully!', 'is-info');
+            }
+        } else {
+            // Add new task
+            const newTask = {
+                id: Date.now().toString(),
+                title,
+                description,
+                progress,
+                status
+            };
+            tasks.push(newTask);
+            showAlert('Task added successfully!');
+        }
+
+        saveData();
+        renderTasks();
+        closeTaskModal();
+    }
+
+    // Function to render Tasks
+    function renderTasks() {
+        const pendingTableBody = document.querySelector('#pending-task-table tbody');
+        const completedTableBody = document.querySelector('#completed-task-table tbody');
+        
+        // Clear previous tasks
+        pendingTableBody.innerHTML = '';
+        completedTableBody.innerHTML = '';
+
+        tasks.forEach((task, index) => {
+            const taskRow = `
+                <tr class="fade-in">
+                    <td>${index + 1}</td>
+                    <td>${task.title}</td>
+                    <td>${task.description}</td>
+                    <td>${task.progress}%</td>
+                    <td>
+                        <button class="button is-small is-info" onclick="openEditTaskModal('${task.id}')">Edit</button>
+                        <button class="button is-small is-danger" onclick="deleteTask('${task.id}')">Delete</button>
+                        ${task.progress < 100 ? 
+                            `<button class="button is-small is-success" onclick="markAsComplete('${task.id}')">Complete</button>` 
+                            : ''
+                        }
+                    </td>
+                </tr>
+            `;
+            if (task.progress < 100) {
+                pendingTableBody.insertAdjacentHTML('beforeend', taskRow);
+            } else {
+                completedTableBody.insertAdjacentHTML('beforeend', taskRow);
+            }
+        });
+
+        toggleCompletedTasksVisibility();
+    }
+
+    // Function to toggle Completed Tasks visibility
+    function toggleCompletedTasksVisibility() {
+        const completedTasksContainer = document.getElementById('completed-tasks-container');
+        if (tasks.some(task => task.progress >= 100)) {
+            completedTasksContainer.style.display = 'block';
+        } else {
+            completedTasksContainer.style.display = 'none';
+        }
+    }
+
+    // Function to delete Task
+    function deleteTask(id) {
+        tasks = tasks.filter(task => task.id !== id);
+        saveData();
+        renderTasks();
+        showAlert('Task deleted successfully!', 'is-danger');
+    }
+
+    // Function to mark Task as Complete
+    function markAsComplete(id) {
+        const task = tasks.find(t => t.id === id);
+        if (task) {
+            task.progress = 100;
+            task.status = 'completed';
+            saveData();
+            renderTasks();
+            showAlert('Task marked as complete!');
+        }
+    }
+
+    // Function to save tasks to localStorage
+    function saveData() {
+        localStorage.setItem('tasks', JSON.stringify(tasks));
+    }
+
+    // Function to load tasks from localStorage
+    function loadData() {
+        const storedTasks = localStorage.getItem('tasks');
+        if (storedTasks) {
+            tasks = JSON.parse(storedTasks);
+        }
+    }
+</script>
+</body>
+</html>
